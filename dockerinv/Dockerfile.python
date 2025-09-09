@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+# Install SSH server and Python dependencies
+RUN apt-get update && apt-get install -y openssh-server python3 python3-pip python3-setuptools
+
+# Prepare SSH daemon
+RUN mkdir /var/run/sshd
+
+# Set root password (change this to a stronger password)
+RUN echo 'root:rootpassword' | chpasswd
+
+# Allow root login via SSH
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Install required Python libraries
+RUN pip3 install apache-beam[sdk] minio pyarrow
+
+WORKDIR /app
+
+# Expose SSH port
+EXPOSE 22
+
+# Start SSH daemon and keep container alive
+CMD ["/usr/sbin/sshd", "-D"]

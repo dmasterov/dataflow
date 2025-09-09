@@ -1,0 +1,3 @@
+apache-beam[sdk]
+minio
+pyarrow

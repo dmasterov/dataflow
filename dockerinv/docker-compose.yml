@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+
+  python-beam:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: python_beam
+    depends_on:
+      - minio
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      AWS_S3_ADDRESSING_STYLE: path
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "8000:8000"    # your app port
+      - "2222:22"      # SSH port
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge
