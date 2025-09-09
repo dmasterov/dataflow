@@ -11,6 +11,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     command: server /data --console-address ":9001"
+    networks:
+      - my_network
 
   python-beam:
     build:
@@ -26,8 +28,10 @@ services:
       AWS_S3_ADDRESSING_STYLE: path
       AWS_S3_ENDPOINT_URL: http://minio:9000
     ports:
-      - "8000:8000"    # your app port
-      - "2222:22"      # SSH port
+      - "8000:8000"
+      - "2222:22"
+    volumes:
+      - /Users/denismasterov/VSProject/Dataflow:/app
     networks:
       - my_network
 

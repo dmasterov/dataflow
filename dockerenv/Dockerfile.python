@@ -13,7 +13,7 @@ RUN echo 'root:rootpassword' | chpasswd
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
 # Install required Python libraries
-RUN pip3 install apache-beam[sdk] minio pyarrow
+RUN pip3 install apache-beam[sdk] minio pyarrow boto3
 
 WORKDIR /app
 
