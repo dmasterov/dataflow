@@ -72,12 +72,10 @@ def run():
     logger = logging.getLogger(__name__)
 
     parquet_url = "https://pandemicdatalake.blob.core.windows.net/public/curated/covid-19/ecdc_cases/latest/ecdc_cases.parquet"
-
     endpoint = "minio:9000"
-
     bucket_name = "input"
     object_prefix = "data"
-
+    batch_size = 100000
     options = PipelineOptions()
     
     with beam.Pipeline(options=options) as p:
@@ -85,7 +83,7 @@ def run():
             p
             | "Start" >> beam.Create([None])
             | "Download Parquet" >> beam.ParDo(DownloadParquetFile(parquet_url))
-            | "Batch to Single File" >> beam.combiners.ToList()
+            | 'Batch elevemts' >> beam.BatchElements(min_batch_size=batch_size, max_batch_size=batch_size * 100)
             | "Write to MinIO" >> beam.ParDo(WriteToMinio(endpoint, bucket_name, object_prefix))
         )
     logger.info("Pipeline completed successfully.")

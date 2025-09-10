@@ -1,4 +1,0 @@
-export AWS_ACCESS_KEY_ID=minioadmin
-export AWS_SECRET_ACCESS_KEY=minioadmin
-export AWS_S3_ENDPOINT=http://localhost:9000
-AWS_S3_ADDRESSING_STYLE=path

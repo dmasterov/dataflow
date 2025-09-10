@@ -12,8 +12,6 @@ def run():
         '--s3_access_key_id=minioadmin',
         '--s3_secret_access_key=minioadmin',
         '--s3_endpoint_url=http://minio:9000',
-        '--s3_region=us-east-1',
-        '--s3_addressing_style=path'
     ])
 
     with beam.Pipeline(options=options) as p:

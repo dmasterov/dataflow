@@ -8,17 +8,14 @@ from apache_beam.io import parquetio
 import pyarrow as pa
 import pyarrow.parquet as pq
 from minio import Minio
-from minio.error import S3Error
 from io import BytesIO
 from apache_beam.transforms import DoFn
 import logging
 import uuid
 from datetime import datetime
+import os
 
-# provide simple template for apache beam pipeline which reads from minio parquet files and simple filter it and put to target same conainer
-# can you directly read data from minio without storing in temp directory? apply filters and bulk write to minio?
-
-class FilterAndTransform(beam.DoFn):
+class FilterAndTransform(DoFn):
     def process(self, element):
         if element.get('continent_exp', '') ==  'Europe':
             element['processed_at'] = datetime.utcnow().isoformat()
@@ -28,7 +25,7 @@ class FilterAndTransform(beam.DoFn):
 
 class WriteToMinio(DoFn):
     def __init__(self, endpoint: str, bucket_name: str, object_prefix: str):
-        self.minio_client = endpoint
+        self.endpoint = endpoint
         self.access_key = "minioadmin"
         self.secret_key = "minioadmin"
         self.bucket_name = bucket_name
@@ -37,10 +34,10 @@ class WriteToMinio(DoFn):
     def process(self, element):
         table = pa.Table.from_pylist(element)
         with BytesIO() as buffer:
-            pq.write_table(table, buffer)
+            pq.write_table(table, buffer, compression='snappy')
             buffer.seek(0)
             minio_client = Minio(
-                self.minio_client,
+                self.endpoint,
                 access_key=self.access_key,
                 secret_key=self.secret_key,
                 secure=False
@@ -59,35 +56,30 @@ class WriteToMinio(DoFn):
         yield element
 
 def run():
-    options = PipelineOptions(
-        runner='DirectRunner',
-    )
-
-    minio_client = Minio(
-        "localhost:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin",
-        secure=False
-    )
-
+    endpoint = "minio:9000"
     bucket_name = "input"
-    input_prefix = "data/"
-    output_prefix = "filtered/"
+    input_prefix = "data"
+    output_prefix = "filtered"
+    access_key = "minioadmin" 
+    secret_access_key = "minioadmin"
+    input_path = f's3://{bucket_name}/{input_prefix}/*.parquet'
 
-    if not minio_client.bucket_exists(bucket_name):
-        minio_client.make_bucket(bucket_name)
+    batch_size = 100000
+
+    options = PipelineOptions([
+        f'--s3_access_key_id={access_key}',
+        f'--s3_secret_access_key={secret_access_key}',
+        f'--s3_endpoint_url=http://{endpoint}',
+    ])
 
     with beam.Pipeline(options=options) as p:
-        input_files = p | 'Create list' >> beam.Create(
-            [f"s3://{bucket_name}/{obj.object_name}" for obj in minio_client.list_objects(bucket_name, prefix=input_prefix)]
+        (
+            p
+            | 'ReadParquet' >> parquetio.ReadFromParquet(input_path)
+            | 'FilterEurope' >> beam.Filter(lambda elem: elem.get('continent_exp', '') == 'Europe')
+            | 'Batch elevemts' >> beam.BatchElements(min_batch_size=100000, max_batch_size=1000000)
+            | 'WriteToMinio' >> beam.ParDo(WriteToMinio(endpoint, bucket_name, output_prefix))
         )
-
-        records  = (input_files
-         | 'ReadFromMinio' >> parquetio.ReadAllFromParquet()
-         | 'FilterAndTransform' >> beam.ParDo(FilterAndTransform())
-         | 'WriteToMinio' >> beam.ParDo(WriteToMinio("localhost:9000", bucket_name, output_prefix))
-        )
-
 
 if __name__ == "__main__":
     run()
