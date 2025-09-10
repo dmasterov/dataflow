@@ -1,11 +1,16 @@
-FROM minio/minio:latest
+FROM python:3.10-slim
 
-ENV MINIO_ROOT_USER=minioadmin
-ENV MINIO_ROOT_PASSWORD=minioadmin
+WORKDIR /app
 
-EXPOSE 9000 9001
+COPY . /app
 
-ENTRYPOINT ["minio", "server", "/data", "--console-address", ":9001"]
-#docker build -t my-minio-image .
-#docker run -d --name minio -p 9000:9000 -p 9001:9001 my-minio-image
+# Install additional dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Set the entrypoint for the container to run the Beam script easily
+CMD ["python"]
+
+# docker build -t af_beam_image .
+
+# docker run --rm --network my_network af_beam_image:latest \
+# python beam_input.py --parquet_url https://pandemicdatalake.blob.core.windows.net/public/curated/covid-19/ecdc_cases/latest/ecdc_cases.parquet --minio_endpoint minio:9000 --minio_bucket input --minio_prefix data --minio_access_key minioadmin --minio_secret_key minioadmin --batch_size 100000

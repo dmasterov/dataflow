@@ -2,9 +2,11 @@ import apache_beam as beam
 from apache_beam.io import parquetio
 from apache_beam.options.pipeline_options import PipelineOptions
 import os
+import sys
 from typing import NamedTuple, Optional
 from apache_beam import CoGroupByKey
-from modules.functions import WriteToMinio
+from helper.functions import WriteToMinio, CustomOptions
+import logging
 
 
 class Record(NamedTuple):
@@ -23,18 +25,31 @@ def dict_to_namedtuple(d):
         deaths=d['deaths'] or 0
     )
 
-def run():
-    input_path = 's3://input/filtered/*.parquet'
-    endpoint = "minio:9000"
-    bucket_name = "input"
-    output_prefix = "aggregate"
+def run(argv=None):
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    logger = logging.getLogger(__name__)
 
-    # Beam pipeline options
+    options = PipelineOptions(argv)
+    options = PipelineOptions(flags=argv)
+    custom_options = options.view_as(CustomOptions)
+
+    bucket_name = custom_options.minio_bucket
+    endpoint = custom_options.minio_endpoint
+    input_prefix = custom_options.minio_input_prefix
+    output_prefix = custom_options.minio_output_prefix
+    access_key = custom_options.minio_access_key
+    secret_key = custom_options.minio_secret_key
+    batch_size = custom_options.batch_size
+
+    input_path = f's3://{bucket_name}/{input_prefix}/*.parquet'
+
     options = PipelineOptions([
-        '--s3_access_key_id=minioadmin',
-        '--s3_secret_access_key=minioadmin',
-        '--s3_endpoint_url=http://minio:9000',
+        f'--s3_access_key_id={access_key}',
+        f'--s3_secret_access_key={secret_key}',
+        f'--s3_endpoint_url=http://{endpoint}',
     ])
+
+    logger.info(f"Parameters: minio_endpoint={endpoint}, minio_bucket={bucket_name}, minio_prefix={input_prefix}, batch_size={batch_size}")
 
     with beam.Pipeline(options=options) as p:
         data = (
@@ -76,12 +91,15 @@ def run():
                     for nl in kv[1]['nl']
                 ]
             )
-        )   
+        )
+    
         w = ( 
             joined
-            | 'Batch elevemts' >> beam.BatchElements(min_batch_size=100000, max_batch_size=1000000)
-            | 'WriteToMinio' >> beam.ParDo(WriteToMinio(endpoint, bucket_name, output_prefix))
+            | 'Batch elevemts' >> beam.BatchElements(min_batch_size=batch_size, max_batch_size=batch_size * 100)
+            | 'WriteToMinio' >> beam.ParDo(WriteToMinio(endpoint, bucket_name, output_prefix, access_key, secret_key))
         )
+
+    logger.info("Pipeline completed successfully.")
 
 if __name__ == '__main__':
     run()
